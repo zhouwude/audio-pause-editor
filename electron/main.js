@@ -56,6 +56,7 @@ function startBackend(resolve) {
 
   backendProcess.on('exit', (code) => {
     console.log(`[Backend] Exited with code ${code}`);
+    if (!apiPort) resolve(null);
     backendProcess = null;
     apiPort = null;
   });
