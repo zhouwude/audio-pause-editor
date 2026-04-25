@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "compounds": [
+    {
+      "name": "Electron + Python",
+      "configurations": ["Electron Main", "Python Backend"],
+      "stopAll": true
+    }
+  ],
+  "configurations": [
+    {
+      "name": "Electron Main",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron",
+      "program": "${workspaceFolder}/electron/main.js",
+      "args": ["--inspect-brk=5858"],
+      "outputCapture": "std",
+      "console": "integratedTerminal",
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "Python Backend",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/main.py",
+      "cwd": "${workspaceFolder}/backend",
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    }
+  ]
+}

@@ -4,7 +4,8 @@
   "description": "音频停顿编辑器 - 分析并调整音频中的句间停顿",
   "main": "electron/main.js",
   "scripts": {
-    "dev": "electron .",
+    "dev": "cross-env NODE_ENV=development electron .",
+    "start": "electron .",
     "build-sidecar": "pyinstaller --clean --onefile sidecar/build-sidecar.spec",
     "build": "electron-builder",
     "build:dir": "electron-builder --dir"
@@ -58,6 +59,7 @@
     }
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0"
   }

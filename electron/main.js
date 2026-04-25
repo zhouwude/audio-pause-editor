@@ -100,6 +100,11 @@ function createWindow() {
       `data:text/html;charset=utf-8,${encodeURIComponent(injectedHtml)}`,
       { baseURLForDataURL: baseUrl }
     );
+
+    // Debug mode: open DevTools automatically
+    if (process.env.NODE_ENV === 'development') {
+      mainWindow.webContents.openDevTools();
+    }
   }).catch(() => {
     dialog.showErrorBox('启动失败', '无法启动后端服务。');
     app.quit();
