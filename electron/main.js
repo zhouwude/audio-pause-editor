@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -66,11 +66,14 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 900,
-    title: '音频停顿编辑器',
+    frame: false,
+    titleBarStyle: 'hidden',
     center: true,
     resizable: true,
     webPreferences: {
       nodeIntegration: false,
+      // contextIsolation disabled to allow port injection via HTML replacement.
+      // TODO: migrate to preload script + contextBridge when port discovery is refactored.
       contextIsolation: false,
     },
   });
@@ -117,6 +120,19 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; });
 }
+
+// Window control IPC handlers with channel validation
+const WINDOW_ACTIONS = new Set(['window-minimize', 'window-maximize', 'window-close']);
+
+ipcMain.on('window-control', (event, action) => {
+  if (!WINDOW_ACTIONS.has(action) || !mainWindow) return;
+  const method = action.replace('window-', '');
+  if (method === 'maximize') {
+    mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize();
+  } else {
+    mainWindow[method]();
+  }
+});
 
 app.commandLine.appendSwitch('--disable-gpu');
 
