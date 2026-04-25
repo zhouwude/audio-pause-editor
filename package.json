@@ -5,6 +5,7 @@
   "main": "electron/main.js",
   "scripts": {
     "dev": "electron .",
+    "start": "electron .",
     "build-sidecar": "pyinstaller --clean --onefile sidecar/build-sidecar.spec",
     "build": "electron-builder",
     "build:dir": "electron-builder --dir"
@@ -58,6 +59,7 @@
     }
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0"
   }

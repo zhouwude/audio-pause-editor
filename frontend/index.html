@@ -24,7 +24,7 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', 'WenQuanYi Micro Hei', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
             background: var(--bg);
             color: var(--text);
             min-height: 100vh;
@@ -726,9 +726,117 @@
             opacity: 0.7;
             border-color: var(--primary) !important;
         }
+
+        /* Custom title bar for frameless window */
+        .title-bar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 32px;
+            background: var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+            -webkit-app-region: drag;
+            z-index: 100;
+            border-bottom: 1px solid var(--border);
+        }
+        .title-bar .title {
+            font-size: 0.85em;
+            color: var(--text-dim);
+            user-select: none;
+        }
+        .title-bar .window-controls {
+            display: flex;
+            gap: 2px;
+            -webkit-app-region: no-drag;
+        }
+        .title-bar .window-controls button {
+            width: 36px;
+            height: 32px;
+            border: none;
+            background: transparent;
+            color: var(--text-dim);
+            font-size: 1.1em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+        }
+        .title-bar .window-controls button:hover {
+            background: var(--surface2);
+        }
+        .title-bar .window-controls .btn-close:hover {
+            background: #e81123;
+            color: white;
+        }
+
+        /* Adjust container for title bar */
+        .container { padding-top: 52px; }
+
+        /* Apply All Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 17, 23, 0.8);
+            z-index: 3000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-overlay.visible { display: flex; }
+        .modal-box {
+            background: var(--surface);
+            border: 2px solid var(--primary);
+            border-radius: 16px;
+            padding: 30px;
+            min-width: 340px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(108, 92, 231, 0.3);
+        }
+        .modal-box h3 { margin-bottom: 8px; }
+        .modal-box p { color: var(--text-dim); font-size: 0.85em; margin-bottom: 16px; }
+        .modal-box input[type="number"] {
+            width: 120px;
+            padding: 8px 12px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.1em;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+        .modal-box input[type="number"]:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        .modal-box .modal-unit {
+            color: var(--text-dim);
+            font-size: 0.9em;
+            margin-left: 4px;
+        }
+        .modal-box .modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        .modal-box .modal-actions .btn { min-width: 80px; justify-content: center; }
     </style>
 </head>
 <body>
+    <!-- Custom Title Bar -->
+    <div class="title-bar">
+        <span class="title">🎙️ 音频停顿编辑器</span>
+        <div class="window-controls">
+            <button class="btn-minimize" id="btnWinMinimize" aria-label="最小化">─</button>
+            <button class="btn-maximize" id="btnWinMaximize" aria-label="最大化">□</button>
+            <button class="btn-close" id="btnWinClose" aria-label="关闭">✕</button>
+        </div>
+    </div>
+
     <div class="container">
         <header>
             <h1>🎙️ 音频停顿编辑器</h1>
@@ -769,6 +877,7 @@
                 <span class="icon">🎵</span>
                 <span class="name" id="fileName">-</span>
                 <span class="meta" id="fileMeta">-</span>
+                <button class="btn btn-secondary" id="btnNewFile" title="重新上传音频">📁 重新上传</button>
             </div>
 
             <!-- Playback -->
@@ -851,7 +960,23 @@
             <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
                 <a class="btn btn-accent" id="btnDownload" href="#" download>⬇️ 下载音频</a>
                 <button class="btn btn-primary" id="btnReanalyzeGenerated">🔍 对生成音频重新检测</button>
-                <button class="btn btn-secondary" id="btnNewFile">📁 上传新文件</button>
+                <button class="btn btn-secondary" id="btnNewFileResult">📁 上传新文件</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Apply All Modal -->
+    <div class="modal-overlay" id="applyAllModal">
+        <div class="modal-box">
+            <h3>批量设置停顿时长</h3>
+            <p>将所有停顿统一设置为指定时长</p>
+            <div>
+                <input type="number" id="applyAllInput" value="500" min="0" step="50">
+                <span class="modal-unit">ms</span>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="applyAllCancel">取消</button>
+                <button class="btn btn-primary" id="applyAllConfirm">确认</button>
             </div>
         </div>
     </div>
@@ -910,6 +1035,7 @@
         async function resolveApiBase() {
             if (_apiBaseResolved) return _apiBaseResolved;
             try {
+                console.log('[api] __ELECTRON_API_PORT__:', window.__ELECTRON_API_PORT__);
                 // Electron: port injected via window.__ELECTRON_API_PORT__
                 if (window.__ELECTRON_API_PORT__) {
                     _apiBaseResolved = `http://127.0.0.1:${window.__ELECTRON_API_PORT__}`;
@@ -930,7 +1056,21 @@
         }
         async function apiFetch(path, options) {
             const base = await resolveApiBase();
+            console.log('[api] Fetching:', `${base}${path}`);
             return fetch(`${base}${path}`, options);
+        }
+
+        // Window control IPC (Electron only)
+        try {
+            const { ipcRenderer } = window.require('electron');
+            const sendWindowAction = action => ipcRenderer.send('window-control', action);
+            $('btnWinMinimize').addEventListener('click', () => sendWindowAction('window-minimize'));
+            $('btnWinMaximize').addEventListener('click', () => sendWindowAction('window-maximize'));
+            $('btnWinClose').addEventListener('click', () => sendWindowAction('window-close'));
+        } catch (e) {
+            // Not running in Electron, hide window controls
+            const titleBar = document.querySelector('.title-bar .window-controls');
+            if (titleBar) titleBar.style.display = 'none';
         }
 
         // Toast notifications
@@ -1309,6 +1449,7 @@
                 return;
             }
 
+            const minDurMs = parseInt($('minDurSlider').value);
             state.pauses.forEach((p, i) => {
                 const item = document.createElement('div');
                 item.className = 'pause-item';
@@ -1332,7 +1473,7 @@
                         <div class="time-range">${formatTime(p.start)} → ${formatTime(p.end)}</div>
                     </div>
                     <span class="duration">${durMs}ms</span>
-                    <input type="number" class="duration-input" value="${durMs}" min="0" step="50"
+                    <input type="number" class="duration-input" value="${durMs}" min="${minDurMs}" step="50"
                            data-index="${i}" title="毫秒">
                     <span class="unit">ms</span>
                     ${diffHtml}
@@ -1345,8 +1486,12 @@
                 const input = item.querySelector('.duration-input');
                 input.addEventListener('change', e => {
                     const newMs = parseFloat(e.target.value);
-                    if (!isNaN(newMs) && newMs >= 0) {
-                        state.pauses[i].adjusted_duration = newMs / 1000;
+                    if (isNaN(newMs) || newMs < minDurMs) {
+                        e.target.value = minDurMs;
+                        toast(`停顿时长不能小于最小气口 ${minDurMs}ms`, 'error');
+                        return;
+                    }
+                    state.pauses[i].adjusted_duration = newMs / 1000;
                         updateDurationDiff();
                         renderPauseBars();
                         // Re-render just the diff badges on other items
@@ -1362,7 +1507,6 @@
                                 diffEl.textContent = `${sign}${(diff * 1000).toFixed(0)}ms`;
                             }
                         });
-                    }
                 });
 
                 input.addEventListener('keydown', e => {
@@ -1412,17 +1556,49 @@
             toast('已重置所有停顿', 'info');
         });
 
-        // Apply all (set all to same duration - prompt user)
+        // Apply all (set all to same duration)
+        const applyAllModal = $('applyAllModal');
+        const applyAllInput = $('applyAllInput');
+
         $('btnApplyAll').addEventListener('click', () => {
-            const ms = prompt('将所有停顿设置为多少毫秒？', '500');
-            if (ms !== null && !isNaN(parseFloat(ms))) {
-                const newDur = parseFloat(ms) / 1000;
+            applyAllInput.min = $('minDurSlider').value;
+            applyAllInput.value = $('minDurSlider').value;
+            applyAllModal.classList.add('visible');
+            setTimeout(() => applyAllInput.focus(), 100);
+        });
+
+        $('applyAllConfirm').addEventListener('click', () => {
+            if (state.pauses.length === 0) {
+                toast('未检测到停顿', 'error');
+                applyAllModal.classList.remove('visible');
+                return;
+            }
+            const minMs = parseInt($('minDurSlider').value);
+            const ms = parseFloat(applyAllInput.value);
+            if (isNaN(ms) || ms < minMs) {
+                toast(`停顿时长不能小于最小气口 ${minMs}ms`, 'error');
+                return;
+            }
+            const newDur = ms / 1000;
                 state.pauses.forEach(p => p.adjusted_duration = newDur);
                 renderPauseList();
                 renderPauseBars();
                 updateDurationDiff();
                 toast(`已设置所有停顿为 ${ms}ms`, 'success');
-            }
+            applyAllModal.classList.remove('visible');
+        });
+
+        $('applyAllCancel').addEventListener('click', () => {
+            applyAllModal.classList.remove('visible');
+        });
+
+        applyAllModal.addEventListener('click', e => {
+            if (e.target === applyAllModal) applyAllModal.classList.remove('visible');
+        });
+
+        applyAllInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') $('applyAllConfirm').click();
+            if (e.key === 'Escape') applyAllModal.classList.remove('visible');
         });
 
         // Generate
@@ -1494,9 +1670,8 @@
         });
 
         // New file
-        $('btnNewFile').addEventListener('click', () => {
-            location.reload();
-        });
+        $('btnNewFile').addEventListener('click', () => location.reload());
+        $('btnNewFileResult').addEventListener('click', () => location.reload());
 
         // Re-analyze generated audio
         $('btnReanalyzeGenerated').addEventListener('click', async () => {
@@ -1653,7 +1828,17 @@
         const minDurSlider = $('minDurSlider');
         const minDurValue = $('minDurValue');
         minDurSlider.addEventListener('input', () => {
-            minDurValue.textContent = `${minDurSlider.value}ms`;
+            const minMs = minDurSlider.value;
+            minDurValue.textContent = `${minMs}ms`;
+            // Update min attribute on all existing duration inputs
+            document.querySelectorAll('.duration-input').forEach(input => {
+                input.min = minMs;
+                // Clamp existing values that are now below min
+                const val = parseFloat(input.value);
+                if (!isNaN(val) && val < parseInt(minMs)) {
+                    input.value = minMs;
+                }
+            });
         });
 
         // Re-analyze button handler

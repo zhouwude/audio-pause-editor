@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -66,11 +66,14 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 900,
-    title: '音频停顿编辑器',
+    frame: false,
+    titleBarStyle: 'hidden',
     center: true,
     resizable: true,
     webPreferences: {
       nodeIntegration: false,
+      // contextIsolation disabled to allow port injection via HTML replacement.
+      // TODO: migrate to preload script + contextBridge when port discovery is refactored.
       contextIsolation: false,
     },
   });
@@ -84,22 +87,32 @@ function createWindow() {
       return;
     }
 
-    // 生产模式：从 resources 读前端文件
-    const frontendPath = process.resourcesPath
+    // 生产模式：从 resources 读前端文件；开发模式：从项目目录读
+    const frontendPath = process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, 'frontend', 'index.html'))
       ? path.join(process.resourcesPath, 'frontend', 'index.html')
       : path.join(__dirname, '..', 'frontend', 'index.html');
 
+    // 写端口到临时文件，preload 脚本读取
+    const portFile = path.join(__dirname, '..', '.electron-port');
+    fs.writeFileSync(portFile, String(port));
+    console.log('[Main] Port file written:', portFile, 'port:', port);
+
+    // 直接注入端口到 HTML 文件，避免 preload 时序问题
     const htmlContent = fs.readFileSync(frontendPath, 'utf-8');
     const injectedHtml = htmlContent.replace(
       '</head>',
       `<script>window.__ELECTRON_API_PORT__ = ${port};</script>\n</head>`
     );
+    const injectedPath = path.join(__dirname, '..', '.electron-injected.html');
+    fs.writeFileSync(injectedPath, injectedHtml);
 
-    const baseUrl = `file://${path.dirname(frontendPath)}/`;
-    mainWindow.loadURL(
-      `data:text/html;charset=utf-8,${encodeURIComponent(injectedHtml)}`,
-      { baseURLForDataURL: baseUrl }
-    );
+    mainWindow.loadFile(injectedPath);
+    console.log('[Main] loadFile called:', injectedPath);
+
+    // Debug mode: open DevTools automatically (development only, no resourcesPath)
+    if (!process.resourcesPath) {
+      mainWindow.webContents.openDevTools();
+    }
   }).catch(() => {
     dialog.showErrorBox('启动失败', '无法启动后端服务。');
     app.quit();
@@ -107,6 +120,21 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; });
 }
+
+// Window control IPC handlers with channel validation
+const WINDOW_ACTIONS = new Set(['window-minimize', 'window-maximize', 'window-close']);
+
+ipcMain.on('window-control', (event, action) => {
+  if (!WINDOW_ACTIONS.has(action) || !mainWindow) return;
+  const method = action.replace('window-', '');
+  if (method === 'maximize') {
+    mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize();
+  } else {
+    mainWindow[method]();
+  }
+});
+
+app.commandLine.appendSwitch('--disable-gpu');
 
 app.whenReady().then(createWindow);
 
