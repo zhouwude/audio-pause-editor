@@ -72,9 +72,8 @@ function createWindow() {
     resizable: true,
     webPreferences: {
       nodeIntegration: false,
-      // contextIsolation disabled to allow port injection via HTML replacement.
-      // TODO: migrate to preload script + contextBridge when port discovery is refactored.
-      contextIsolation: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
 
@@ -87,29 +86,23 @@ function createWindow() {
       return;
     }
 
-    // 生产模式：从 resources 读前端文件；开发模式：从项目目录读
+    // 写端口到系统临时目录（开发+生产统一路径）
+    const portFile = path.join(
+      os.tmpdir(),
+      '.audio-pause-editor-port'
+    );
+    fs.writeFileSync(portFile, String(port));
+    console.log('[Main] Port file written:', portFile, 'port:', port);
+
+    // 生产模式从 resources 读，开发模式从项目目录读
     const frontendPath = process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, 'frontend', 'index.html'))
       ? path.join(process.resourcesPath, 'frontend', 'index.html')
       : path.join(__dirname, '..', 'frontend', 'index.html');
 
-    // 写端口到临时文件，preload 脚本读取
-    const portFile = path.join(__dirname, '..', '.electron-port');
-    fs.writeFileSync(portFile, String(port));
-    console.log('[Main] Port file written:', portFile, 'port:', port);
+    mainWindow.loadFile(frontendPath);
+    console.log('[Main] loadFile:', frontendPath);
 
-    // 直接注入端口到 HTML 文件，避免 preload 时序问题
-    const htmlContent = fs.readFileSync(frontendPath, 'utf-8');
-    const injectedHtml = htmlContent.replace(
-      '</head>',
-      `<script>window.__ELECTRON_API_PORT__ = ${port};</script>\n</head>`
-    );
-    const injectedPath = path.join(__dirname, '..', '.electron-injected.html');
-    fs.writeFileSync(injectedPath, injectedHtml);
-
-    mainWindow.loadFile(injectedPath);
-    console.log('[Main] loadFile called:', injectedPath);
-
-    // Debug mode: open DevTools automatically (development only, no resourcesPath)
+    // Debug mode: open DevTools (development only)
     if (!process.resourcesPath) {
       mainWindow.webContents.openDevTools();
     }

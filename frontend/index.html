@@ -1035,10 +1035,10 @@
         async function resolveApiBase() {
             if (_apiBaseResolved) return _apiBaseResolved;
             try {
-                console.log('[api] __ELECTRON_API_PORT__:', window.__ELECTRON_API_PORT__);
-                // Electron: port injected via window.__ELECTRON_API_PORT__
-                if (window.__ELECTRON_API_PORT__) {
-                    _apiBaseResolved = `http://127.0.0.1:${window.__ELECTRON_API_PORT__}`;
+                console.log('[api] electronAPI:', window.electronAPI);
+                // Electron: port injected via preload contextBridge
+                if (window.electronAPI && window.electronAPI.apiPort) {
+                    _apiBaseResolved = `http://127.0.0.1:${window.electronAPI.apiPort}`;
                 }
                 // Tauri: get port from Rust sidecar manager
                 else if (window.__TAURI__ && window.__TAURI__.invoke) {
@@ -1062,8 +1062,7 @@
 
         // Window control IPC (Electron only)
         try {
-            const { ipcRenderer } = window.require('electron');
-            const sendWindowAction = action => ipcRenderer.send('window-control', action);
+            const sendWindowAction = action => window.electronAPI.windowControl(action);
             $('btnWinMinimize').addEventListener('click', () => sendWindowAction('window-minimize'));
             $('btnWinMaximize').addEventListener('click', () => sendWindowAction('window-maximize'));
             $('btnWinClose').addEventListener('click', () => sendWindowAction('window-close'));
