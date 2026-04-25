@@ -1,9 +1,0 @@
-{
-  "terminal.integrated.defaultProfile.windows": "Ubuntu (WSL)",
-  "terminal.integrated.profiles.windows": {
-    "Ubuntu (WSL)": {
-      "source": "WSL",
-      "args": ["-d", "Ubuntu"]
-    }
-  }
-}
