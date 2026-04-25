@@ -113,6 +113,8 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
+app.commandLine.appendSwitch('--disable-gpu');
+
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
