@@ -910,6 +910,7 @@
         async function resolveApiBase() {
             if (_apiBaseResolved) return _apiBaseResolved;
             try {
+                console.log('[api] __ELECTRON_API_PORT__:', window.__ELECTRON_API_PORT__);
                 // Electron: port injected via window.__ELECTRON_API_PORT__
                 if (window.__ELECTRON_API_PORT__) {
                     _apiBaseResolved = `http://127.0.0.1:${window.__ELECTRON_API_PORT__}`;
@@ -930,6 +931,7 @@
         }
         async function apiFetch(path, options) {
             const base = await resolveApiBase();
+            console.log('[api] Fetching:', `${base}${path}`);
             return fetch(`${base}${path}`, options);
         }
 

@@ -72,7 +72,6 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: false,
-      preload: path.join(__dirname, 'preload.js'),
     },
   });
 
@@ -93,8 +92,19 @@ function createWindow() {
     // 写端口到临时文件，preload 脚本读取
     const portFile = path.join(__dirname, '..', '.electron-port');
     fs.writeFileSync(portFile, String(port));
+    console.log('[Main] Port file written:', portFile, 'port:', port);
 
-    mainWindow.loadFile(frontendPath);
+    // 直接注入端口到 HTML 文件，避免 preload 时序问题
+    const htmlContent = fs.readFileSync(frontendPath, 'utf-8');
+    const injectedHtml = htmlContent.replace(
+      '</head>',
+      `<script>window.__ELECTRON_API_PORT__ = ${port};</script>\n</head>`
+    );
+    const injectedPath = path.join(__dirname, '..', '.electron-injected.html');
+    fs.writeFileSync(injectedPath, injectedHtml);
+
+    mainWindow.loadFile(injectedPath);
+    console.log('[Main] loadFile called:', injectedPath);
 
     // Debug mode: open DevTools automatically (development only, no resourcesPath)
     if (!process.resourcesPath) {
