@@ -72,6 +72,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: false,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
 
@@ -84,25 +85,19 @@ function createWindow() {
       return;
     }
 
-    // 生产模式：从 resources 读前端文件
-    const frontendPath = process.resourcesPath
+    // 生产模式：从 resources 读前端文件；开发模式：从项目目录读
+    const frontendPath = process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, 'frontend', 'index.html'))
       ? path.join(process.resourcesPath, 'frontend', 'index.html')
       : path.join(__dirname, '..', 'frontend', 'index.html');
 
-    const htmlContent = fs.readFileSync(frontendPath, 'utf-8');
-    const injectedHtml = htmlContent.replace(
-      '</head>',
-      `<script>window.__ELECTRON_API_PORT__ = ${port};</script>\n</head>`
-    );
+    // 写端口到临时文件，preload 脚本读取
+    const portFile = path.join(__dirname, '..', '.electron-port');
+    fs.writeFileSync(portFile, String(port));
 
-    const baseUrl = `file://${path.dirname(frontendPath)}/`;
-    mainWindow.loadURL(
-      `data:text/html;charset=utf-8,${encodeURIComponent(injectedHtml)}`,
-      { baseURLForDataURL: baseUrl }
-    );
+    mainWindow.loadFile(frontendPath);
 
-    // Debug mode: open DevTools automatically
-    if (process.env.NODE_ENV === 'development') {
+    // Debug mode: open DevTools automatically (development only, no resourcesPath)
+    if (!process.resourcesPath) {
       mainWindow.webContents.openDevTools();
     }
   }).catch(() => {
