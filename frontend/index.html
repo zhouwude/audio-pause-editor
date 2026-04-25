@@ -1,0 +1,1683 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音频停顿编辑器</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --surface2: #242836;
+            --border: #2d3143;
+            --primary: #6c5ce7;
+            --primary-light: #a29bfe;
+            --accent: #00cec9;
+            --danger: #ff6b6b;
+            --success: #00b894;
+            --text: #dfe6e9;
+            --text-dim: #636e72;
+            --pause-bar: #fdcb6e;
+            --pause-bar-hover: #f39c12;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+        header {
+            text-align: center;
+            padding: 30px 0 20px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            font-size: 2em;
+            background: linear-gradient(135deg, var(--primary-light), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+
+        header p { color: var(--text-dim); font-size: 0.95em; }
+
+        /* Upload Area */
+        .upload-area {
+            border: 2px dashed var(--border);
+            border-radius: 16px;
+            padding: 60px 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: var(--surface);
+            position: relative;
+        }
+
+        .upload-area:hover, .upload-area.dragover {
+            border-color: var(--primary);
+            background: var(--surface2);
+        }
+
+        .upload-area .icon { font-size: 4em; margin-bottom: 15px; }
+        .upload-area h2 { margin-bottom: 10px; font-size: 1.3em; }
+        .upload-area p { color: var(--text-dim); }
+
+        .upload-area input[type="file"] {
+            position: absolute; inset: 0;
+            opacity: 0; cursor: pointer;
+        }
+
+        /* Steps indicator */
+        .steps {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-dim);
+            font-size: 0.9em;
+        }
+
+        .step.active { color: var(--primary-light); }
+        .step.done { color: var(--success); }
+
+        .step-num {
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            background: var(--surface2);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold;
+            font-size: 0.85em;
+        }
+
+        .step.active .step-num { background: var(--primary); color: white; }
+        .step.done .step-num { background: var(--success); color: white; }
+
+        /* Waveform area */
+        .editor-panel {
+            display: none;
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+
+        .editor-panel.visible { display: block; }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 12px 16px;
+            background: var(--surface2);
+            border-radius: 10px;
+        }
+
+        .file-info .name { flex: 1; font-weight: 600; }
+        .file-info .meta { color: var(--text-dim); font-size: 0.85em; }
+        .playback-info {
+            font-size: 0.8em;
+            padding: 2px 10px;
+            border-radius: 10px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--primary-light);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .playback-info.duration { color: var(--accent); }
+
+        /* Waveform canvas */
+        .waveform-container {
+            position: relative;
+            background: var(--bg);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 15px;
+            cursor: crosshair;
+        }
+
+        #waveformCanvas {
+            display: block;
+            width: 100%;
+            height: 120px;
+        }
+
+        /* Pause bars overlay */
+        .pause-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+        }
+
+        .pause-bar {
+            position: absolute;
+            top: 5px;
+            bottom: 5px;
+            width: 6px;
+            background: var(--pause-bar);
+            border-radius: 3px;
+            pointer-events: auto;
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+            transform-origin: center;
+        }
+
+        .pause-bar:hover {
+            background: var(--pause-bar-hover);
+            transform: scaleX(1.8);
+            z-index: 10;
+        }
+
+        .pause-bar.selected {
+            background: var(--primary);
+            transform: scaleX(2.2);
+            z-index: 11;
+        }
+
+        .pause-bar .tooltip {
+            position: absolute;
+            bottom: calc(100% + 6px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.75em;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.15s;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        .pause-bar:hover .tooltip,
+        .pause-bar.selected .tooltip { opacity: 1; }
+
+        /* Playback controls */
+        .playback-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            padding: 8px 18px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+        }
+
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: #5a4bd1; }
+        .btn-accent { background: var(--accent); color: var(--bg); }
+        .btn-accent:hover { background: #00b5b0; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-danger:hover { background: #ee5a5a; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-success:hover { background: #00a383; }
+        .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: var(--border); }
+
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .time-display {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.9em;
+            color: var(--accent);
+            min-width: 100px;
+        }
+
+        .progress-bar-container {
+            flex: 1;
+            height: 4px;
+            background: var(--surface2);
+            border-radius: 2px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            width: 0%;
+            transition: width 0.05s linear;
+        }
+
+        /* Pause list */
+        .pause-list-section {
+            margin-top: 20px;
+        }
+
+        .pause-list-section h3 {
+            margin-bottom: 12px;
+            font-size: 1em;
+            color: var(--primary-light);
+        }
+
+        .pause-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+
+        .pause-list::-webkit-scrollbar { width: 6px; }
+        .pause-list::-webkit-scrollbar-track { background: var(--bg); border-radius: 3px; }
+        .pause-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        .pause-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+            gap: 12px;
+            transition: background 0.15s;
+        }
+
+        .pause-item:last-child { border-bottom: none; }
+        .pause-item:hover { background: var(--surface2); }
+        .pause-item.selected { background: rgba(108, 92, 231, 0.15); }
+
+        .pause-item .idx {
+            width: 32px; height: 32px;
+            background: var(--surface2);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold;
+            font-size: 0.85em;
+            flex-shrink: 0;
+        }
+
+        .pause-item.selected .idx { background: var(--primary); color: white; }
+
+        .pause-item .time-info { flex: 1; }
+        .pause-item .time-range { font-size: 0.85em; color: var(--text-dim); }
+        .pause-item .duration {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85em;
+            color: var(--pause-bar);
+        }
+
+        .pause-item .duration-input {
+            width: 80px;
+            padding: 4px 8px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85em;
+            text-align: center;
+        }
+
+        .pause-item .duration-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .pause-item .unit {
+            font-size: 0.8em;
+            color: var(--text-dim);
+        }
+
+        .pause-item .diff {
+            font-size: 0.75em;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .diff.positive { background: rgba(0, 184, 148, 0.2); color: var(--success); }
+        .diff.negative { background: rgba(255, 107, 107, 0.2); color: var(--danger); }
+
+        /* Duration diff display in header */
+        .duration-diff {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.85em;
+            padding: 4px 12px;
+            border-radius: 8px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            white-space: nowrap;
+            margin-right: 8px;
+        }
+        .duration-diff .val { font-weight: 700; }
+        .duration-diff .val.positive { color: var(--success); }
+        .duration-diff .val.negative { color: var(--danger); }
+        .duration-diff .val.neutral { color: var(--text-dim); }
+
+        /* Generate section */
+        .generate-section {
+            display: none;
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 25px;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .generate-section.visible { display: block; }
+
+        .generate-section h3 { margin-bottom: 15px; }
+
+        .summary-table {
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto 20px;
+            text-align: left;
+        }
+
+        .summary-table td { padding: 8px 0; }
+        .summary-table td:first-child { color: var(--text-dim); }
+        .summary-table td:last-child {
+            font-family: 'JetBrains Mono', monospace;
+            text-align: right;
+        }
+
+        /* Generated audio preview */
+        .generated-audio-preview {
+            max-width: 500px;
+            margin: 0 auto 20px;
+            padding: 16px;
+            background: var(--surface2);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            text-align: left;
+        }
+        .preview-label {
+            font-size: 0.9em;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+        #generatedAudioPlayer {
+            border-radius: 8px;
+            outline: none;
+        }
+
+        /* Progress overlay */
+        .progress-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 17, 23, 0.85);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .progress-overlay.visible {
+            display: flex;
+        }
+
+        .progress-box {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 40px;
+            text-align: center;
+            min-width: 350px;
+        }
+
+        .spinner {
+            width: 50px; height: 50px;
+            border: 4px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .progress-box h3 { margin-bottom: 8px; }
+        .progress-box p { color: var(--text-dim); font-size: 0.9em; }
+
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideIn 0.3s ease;
+            min-width: 280px;
+        }
+
+        .toast.success { border-left: 4px solid var(--success); }
+        .toast.error { border-left: 4px solid var(--danger); }
+        .toast.info { border-left: 4px solid var(--primary); }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Audio player */
+        audio { width: 100%; margin-top: 10px; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container { padding: 10px; }
+            header h1 { font-size: 1.5em; }
+            .steps { gap: 10px; flex-wrap: wrap; }
+            .pause-item { flex-wrap: wrap; }
+        }
+
+        /* Scrollbar for body */
+        body::-webkit-scrollbar { width: 8px; }
+        body::-webkit-scrollbar-track { background: var(--bg); }
+        body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        /* Noise threshold settings */
+        .noise-settings {
+            margin-top: 25px;
+            padding: 18px 20px;
+            background: var(--surface2);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+        .noise-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .noise-label {
+            font-size: 0.95em;
+            font-weight: 600;
+            color: var(--text);
+        }
+        .noise-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.1em;
+            font-weight: 700;
+            color: var(--primary-light);
+            background: var(--surface);
+            padding: 4px 12px;
+            border-radius: 6px;
+        }
+        .noise-slider-container { margin-bottom: 10px; }
+        .noise-slider {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: linear-gradient(to right, var(--danger), var(--warning), var(--success));
+            border-radius: 3px;
+            outline: none;
+        }
+        .noise-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: white;
+            border: 2px solid var(--primary);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+        }
+        .noise-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: white;
+            border: 2px solid var(--primary);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .noise-scale {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75em;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+        .noise-desc {
+            font-size: 0.8em;
+            color: var(--text-dim);
+            line-height: 1.5;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+        .noise-desc code {
+            background: var(--surface);
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 0.9em;
+            color: var(--primary-light);
+        }
+
+        /* Noise settings in editor panel */
+        .noise-editor-settings {
+            margin: 15px 0;
+            padding: 14px 16px;
+            background: var(--surface2);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+        .noise-editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .noise-editor-label {
+            font-size: 0.9em;
+            font-weight: 600;
+            color: var(--text);
+        }
+        .noise-editor-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1em;
+            font-weight: 700;
+            color: var(--primary-light);
+            background: var(--surface);
+            padding: 3px 10px;
+            border-radius: 5px;
+        }
+        .noise-editor-slider { margin-bottom: 8px; }
+        .noise-editor-slider input[type="range"] {
+            width: 100%;
+            height: 5px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: linear-gradient(to right, var(--danger), var(--warning), var(--success));
+            border-radius: 3px;
+            outline: none;
+        }
+        .noise-editor-slider input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            background: white;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+        }
+        .noise-ticks {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            padding: 0 2px;
+            position: relative;
+        }
+        .noise-ticks .tick {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 22px;
+        }
+        .noise-ticks .tick .tick-line {
+            width: 1px;
+            height: 5px;
+            background: var(--border);
+            margin-bottom: 3px;
+        }
+        .noise-ticks .tick .tick-label {
+            font-size: 0.65em;
+            color: var(--text-dim);
+            line-height: 1;
+        }
+        .noise-ticks .tick.active .tick-line {
+            height: 8px;
+            background: var(--primary-light);
+        }
+        .noise-ticks .tick.active .tick-label {
+            color: var(--primary-light);
+            font-weight: 700;
+        }
+        .noise-editor-desc {
+            font-size: 0.75em;
+            color: var(--text-dim);
+            line-height: 1.4;
+            padding-top: 8px;
+            border-top: 1px solid var(--border);
+        }
+        .noise-editor-desc code {
+            background: var(--surface);
+            padding: 1px 4px;
+            border-radius: 3px;
+            color: var(--primary-light);
+        }
+
+        /* Min duration slider */
+        .min-dur-slider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+        .min-dur-slider .noise-editor-label {
+            font-size: 0.85em;
+            flex-shrink: 0;
+        }
+        .min-dur-slider input[type="range"] {
+            flex: 1;
+            height: 4px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: linear-gradient(to right, var(--primary-light), var(--accent));
+            border-radius: 2px;
+            outline: none;
+        }
+        .min-dur-slider input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .min-dur-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9em;
+            font-weight: 700;
+            color: var(--accent);
+            background: var(--surface);
+            padding: 2px 8px;
+            border-radius: 4px;
+            min-width: 55px;
+            text-align: center;
+        }
+
+        /* Re-analyze button */
+        .btn.reanalyzing {
+            opacity: 0.7;
+            border-color: var(--primary) !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎙️ 音频停顿编辑器</h1>
+            <p>分析音频中的句间停顿，可视化编辑，一键重新生成</p>
+        </header>
+
+        <!-- Steps -->
+        <div class="steps">
+            <div class="step active" id="step1">
+                <div class="step-num">1</div>
+                <span>上传音频</span>
+            </div>
+            <div class="step" id="step2">
+                <div class="step-num">2</div>
+                <span>分析停顿</span>
+            </div>
+            <div class="step" id="step3">
+                <div class="step-num">3</div>
+                <span>调整停顿</span>
+            </div>
+            <div class="step" id="step4">
+                <div class="step-num">4</div>
+                <span>导出音频</span>
+            </div>
+        </div>
+
+        <!-- Upload Area -->
+        <div class="upload-area" id="uploadArea">
+            <div class="icon">🎵</div>
+            <h2>拖拽音频文件到此处，或点击上传</h2>
+            <p>支持 MP3 / WAV / OGG / FLAC / M4A / AAC（最大 50MB）</p>
+            <input type="file" id="fileInput" accept=".mp3,.wav,.ogg,.flac,.m4a,.aac,.wma">
+        </div>
+
+        <!-- Editor Panel -->
+        <div class="editor-panel" id="editorPanel">
+            <div class="file-info" id="fileInfo">
+                <span class="icon">🎵</span>
+                <span class="name" id="fileName">-</span>
+                <span class="meta" id="fileMeta">-</span>
+            </div>
+
+            <!-- Playback -->
+            <div class="playback-controls">
+                <button class="btn btn-primary" id="btnPlay" disabled>▶ 播放</button>
+                <button class="btn btn-secondary" id="btnStop" disabled>⏹ 停止</button>
+                <span class="time-display" id="timeDisplay">00:00.000</span>
+                <div class="progress-bar-container" id="progressContainer">
+                    <div class="progress-bar-fill" id="progressFill"></div>
+                </div>
+                <span class="playback-info duration" id="totalDuration">0s</span>
+                <span class="playback-info" id="pauseCount">0 个气口</span>
+            </div>
+
+            <!-- Noise Settings (Editor Panel) -->
+            <div class="noise-editor-settings" id="noiseEditorSettings">
+                <div class="noise-editor-header">
+                    <span class="noise-editor-label">🔇 静音检测阈值</span>
+                    <span class="noise-editor-value" id="noiseEditorValue">-20dB</span>
+                </div>
+                <div class="noise-editor-slider">
+                    <input type="range" id="noiseEditorSlider" min="-35" max="-10" value="-20" step="1">
+                    <div class="noise-ticks" id="noiseTicks"></div>
+                </div>
+                <div class="noise-editor-desc">
+                    <strong>建议值：-20dB</strong> — 阈值根据音频底噪动态计算。值越高（如 -10dB）越敏感，检测到的气口越多；值越低（如 -35dB）越宽松，气口越少。
+                </div>
+                <div class="min-dur-slider">
+                    <span class="noise-editor-label">⏱️ 最小气口</span>
+                    <input type="range" id="minDurSlider" min="50" max="500" value="100" step="10">
+                    <span class="min-dur-value" id="minDurValue">100ms</span>
+                </div>
+            </div>
+
+            <!-- Waveform -->
+            <div class="waveform-container" id="waveformContainer">
+                <canvas id="waveformCanvas"></canvas>
+                <div class="pause-overlay" id="pauseOverlay"></div>
+            </div>
+
+            <!-- Audio player (hidden, for actual playback) -->
+            <audio id="audioPlayer" preload="auto"></audio>
+
+            <!-- Pause list -->
+            <div class="pause-list-section">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <h3 style="margin:0;">📊 停顿列表</h3>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="duration-diff" id="durationDiff" style="display:none;"></span>
+                        <button class="btn btn-secondary" id="btnReanalyze" title="使用当前阈值重新检测停顿">
+                            🔍 重新检测
+                        </button>
+                        <button class="btn btn-secondary" id="btnApplyAll" disabled>✓ 应用全部</button>
+                        <button class="btn btn-secondary" id="btnResetAll" disabled>↺ 重置全部</button>
+                    </div>
+                </div>
+                <div class="pause-list" id="pauseList"></div>
+            </div>
+
+            <!-- Generate -->
+            <div style="display:flex; align-items:center; justify-content:center; gap:16px; margin-top:25px;">
+                <button class="btn btn-success" id="btnGenerate" disabled style="padding:12px 40px; font-size:1.05em;">
+                    🚀 生成新音频
+                </button>
+                <span class="duration-diff" id="durationDiffBtn" style="display:none;"></span>
+            </div>
+        </div>
+
+        <!-- Generate result -->
+        <div class="generate-section" id="generateSection">
+            <h3>✅ 音频生成完成</h3>
+            <table class="summary-table" id="summaryTable"></table>
+            
+            <!-- Generated audio preview -->
+            <div class="generated-audio-preview" id="generatedAudioPreview">
+                <div class="preview-label">🎧 试听生成结果</div>
+                <audio id="generatedAudioPlayer" controls preload="auto" style="width: 100%; margin-top: 8px;"></audio>
+            </div>
+            
+            <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+                <a class="btn btn-accent" id="btnDownload" href="#" download>⬇️ 下载音频</a>
+                <button class="btn btn-primary" id="btnReanalyzeGenerated">🔍 对生成音频重新检测</button>
+                <button class="btn btn-secondary" id="btnNewFile">📁 上传新文件</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress overlay -->
+    <div class="progress-overlay" id="progressOverlay">
+        <div class="progress-box">
+            <div class="spinner"></div>
+            <h3 id="progressTitle">处理中...</h3>
+            <p id="progressText">请稍候</p>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        // State
+        const state = {
+            fileId: null,
+            filename: '',
+            duration: 0,
+            pauses: [],
+            waveform: [],
+            selectedPauseIndex: null,
+            audioBuffer: null,
+            isPlaying: false,
+            playStartTime: 0,
+            playOffset: 0,
+            audioContext: null,
+            sourceNode: null,
+            analyserNode: null,
+            originalFile: null,  // Keep reference for audio playback
+        };
+
+        // DOM refs
+        const $ = id => document.getElementById(id);
+        const uploadArea = $('uploadArea');
+        const fileInput = $('fileInput');
+        const editorPanel = $('editorPanel');
+        const waveformCanvas = $('waveformCanvas');
+        const pauseOverlay = $('pauseOverlay');
+        const pauseList = $('pauseList');
+        const audioPlayer = $('audioPlayer');
+        const btnPlay = $('btnPlay');
+        const btnStop = $('btnStop');
+        const timeDisplay = $('timeDisplay');
+        const progressContainer = $('progressContainer');
+        const progressFill = $('progressFill');
+        const btnGenerate = $('btnGenerate');
+        const generateSection = $('generateSection');
+        const progressOverlay = $('progressOverlay');
+
+        // API base resolution — async to support Tauri sidecar port discovery
+        let _apiBaseResolved = null;
+        async function resolveApiBase() {
+            if (_apiBaseResolved) return _apiBaseResolved;
+            try {
+                // Electron: port injected via window.__ELECTRON_API_PORT__
+                if (window.__ELECTRON_API_PORT__) {
+                    _apiBaseResolved = `http://127.0.0.1:${window.__ELECTRON_API_PORT__}`;
+                }
+                // Tauri: get port from Rust sidecar manager
+                else if (window.__TAURI__ && window.__TAURI__.invoke) {
+                    _apiBaseResolved = await window.__TAURI__.invoke('get_api_base');
+                }
+                // Fallback: same origin (for dev in browser)
+                else {
+                    _apiBaseResolved = window.location.origin;
+                }
+            } catch (e) {
+                console.warn('API base resolution failed:', e);
+                _apiBaseResolved = window.location.origin;
+            }
+            return _apiBaseResolved;
+        }
+        async function apiFetch(path, options) {
+            const base = await resolveApiBase();
+            return fetch(`${base}${path}`, options);
+        }
+
+        // Toast notifications
+        function toast(message, type = 'info') {
+            const container = $('toastContainer');
+            const t = document.createElement('div');
+            t.className = `toast ${type}`;
+            t.innerHTML = `<span>${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</span><span>${message}</span>`;
+            container.appendChild(t);
+            setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000);
+        }
+
+        // Show/hide progress
+        function showProgress(title, text) {
+            $('progressTitle').textContent = title;
+            $('progressText').textContent = text;
+            progressOverlay.classList.add('visible');
+        }
+
+        function hideProgress() {
+            progressOverlay.classList.remove('visible');
+        }
+
+        // Format time
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${String(mins).padStart(2, '0')}:${secs.toFixed(3).padStart(6, '0')}`;
+        }
+
+        // Update step indicator
+        function updateStep(num) {
+            for (let i = 1; i <= 4; i++) {
+                const el = $(`step${i}`);
+                el.classList.remove('active', 'done');
+                if (i < num) el.classList.add('done');
+                if (i === num) el.classList.add('active');
+            }
+        }
+
+        // Upload
+        fileInput.addEventListener('change', handleUpload);
+        uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+        uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+        uploadArea.addEventListener('drop', e => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                handleUpload();
+            }
+        });
+
+        async function handleUpload() {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            showProgress('上传中...', file.name);
+
+            try {
+                const resp = await apiFetch('/api/upload', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    throw new Error(err.detail || '上传失败');
+                }
+
+                const data = await resp.json();
+                state.fileId = data.file_id;
+                state.filename = data.filename;
+                state.originalFile = file;
+
+                toast('上传成功', 'success');
+                await analyzeAudio();
+            } catch (err) {
+                toast(err.message, 'error');
+                hideProgress();
+            }
+        }
+
+        // Analyze
+        async function analyzeAudio() {
+            showProgress('分析音频...', '正在检测句间停顿');
+            updateStep(2);
+
+            try {
+                const noise = parseInt($('noiseEditorSlider').value) || -20;
+                const minDur = parseInt($('minDurSlider').value) / 1000;
+                const resp = await apiFetch(`/api/analyze/${state.fileId}?noise=${noise}&min_duration=${minDur}`, {
+                    method: 'POST',
+                });
+
+                if (!resp.ok) throw new Error('分析失败');
+
+                const data = await resp.json();
+                state.duration = data.duration;
+                state.pauses = data.pauses;
+                state.noiseThreshold = noise;
+
+                // Sync sliders to current noise value
+                syncNoiseSliders(noise);
+
+                // Show detection info
+                const info = data.noise_floor !== undefined ? `底噪: ${data.noise_floor}dB | 阈值: ${data.threshold}dB` : `阈值: ${noise}dB`;
+                toast(`检测到 ${data.pauses.length} 个停顿（${info}）`, 'success');
+
+                // Get waveform
+                await fetchWaveform();
+
+                // Show editor
+                uploadArea.style.display = 'none';
+                editorPanel.classList.add('visible');
+                $('fileName').textContent = state.filename;
+                $('fileMeta').textContent = `${data.channels}ch | ${data.sample_rate}Hz`;
+
+                // Update playback info
+                $('totalDuration').textContent = formatTime(state.duration);
+                $('pauseCount').textContent = `${data.pauses.length} 个气口`;
+
+                renderWaveform();
+                renderPauseBars();
+                renderPauseList();
+                updateDurationDiff();
+
+                // Setup audio
+                await setupAudio();
+
+                updateStep(3);
+                btnGenerate.disabled = false;
+                $('btnApplyAll').disabled = false;
+                $('btnResetAll').disabled = false;
+                $('btnReanalyze').disabled = false;
+            } catch (err) {
+                toast(err.message, 'error');
+            } finally {
+                hideProgress();
+            }
+        }
+
+        // Fetch waveform
+        async function fetchWaveform() {
+            try {
+                const resp = await apiFetch(`/api/waveform/${state.fileId}`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    state.waveform = data.samples;
+                }
+            } catch (e) {
+                console.warn('Waveform fetch failed:', e);
+            }
+        }
+
+        // Setup audio for playback
+        async function setupAudio() {
+            try {
+                const file = state.originalFile || (fileInput.files.length ? fileInput.files[0] : null);
+                if (file) {
+                    const url = URL.createObjectURL(file);
+                    audioPlayer.src = url;
+                    audioPlayer.load();
+                    btnPlay.disabled = false;
+                    btnStop.disabled = false;
+                }
+            } catch (e) {
+                console.warn('Audio setup failed:', e);
+            }
+        }
+
+        // Playback
+        btnPlay.addEventListener('click', togglePlay);
+        btnStop.addEventListener('click', stopPlay);
+
+        function togglePlay() {
+            if (state.isPlaying) {
+                audioPlayer.pause();
+                state.isPlaying = false;
+                btnPlay.innerHTML = '▶ 播放';
+            } else {
+                audioPlayer.play();
+                state.isPlaying = true;
+                btnPlay.innerHTML = '⏸ 暂停';
+                updatePlayTime();
+            }
+        }
+
+        function stopPlay() {
+            audioPlayer.pause();
+            audioPlayer.currentTime = 0;
+            state.isPlaying = false;
+            btnPlay.innerHTML = '▶ 播放';
+            progressFill.style.width = '0%';
+            timeDisplay.textContent = '00:00.000';
+        }
+
+        function updatePlayTime() {
+            if (!state.isPlaying) return;
+
+            const current = audioPlayer.currentTime;
+            timeDisplay.textContent = formatTime(current);
+            progressFill.style.width = `${(current / state.duration) * 100}%`;
+
+            // Update playhead on waveform
+            updatePlayhead(current);
+
+            requestAnimationFrame(updatePlayTime);
+        }
+
+        // Progress bar click to seek
+        progressContainer.addEventListener('click', e => {
+            if (!state.duration) return;
+            const rect = progressContainer.getBoundingClientRect();
+            const ratio = (e.clientX - rect.left) / rect.width;
+            audioPlayer.currentTime = ratio * state.duration;
+            timeDisplay.textContent = formatTime(audioPlayer.currentTime);
+            progressFill.style.width = `${ratio * 100}%`;
+        });
+
+        // Render waveform
+        function renderWaveform() {
+            const canvas = waveformCanvas;
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+
+            canvas.width = canvas.offsetWidth * dpr;
+            canvas.height = canvas.offsetHeight * dpr;
+            ctx.scale(dpr, dpr);
+
+            const w = canvas.offsetWidth;
+            const h = canvas.offsetHeight;
+            const midY = h / 2;
+            const data = state.waveform;
+
+            if (!data || data.length === 0) {
+                ctx.fillStyle = '#636e72';
+                ctx.font = '14px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('波形加载中...', w / 2, midY);
+                return;
+            }
+
+            // Draw waveform
+            const barWidth = Math.max(1, w / data.length);
+            ctx.clearRect(0, 0, w, h);
+
+            // Background
+            ctx.fillStyle = '#0f1117';
+            ctx.fillRect(0, 0, w, h);
+
+            // Center line
+            ctx.strokeStyle = '#2d3143';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, midY);
+            ctx.lineTo(w, midY);
+            ctx.stroke();
+
+            // Waveform bars
+            const gradient = ctx.createLinearGradient(0, 0, 0, h);
+            gradient.addColorStop(0, '#6c5ce7');
+            gradient.addColorStop(0.5, '#a29bfe');
+            gradient.addColorStop(1, '#6c5ce7');
+            ctx.fillStyle = gradient;
+
+            for (let i = 0; i < data.length; i++) {
+                const x = (i / data.length) * w;
+                const barH = data[i] * midY * 0.9;
+                ctx.fillRect(x, midY - barH, Math.max(barWidth - 0.5, 1), barH * 2);
+            }
+
+            // Time labels
+            ctx.fillStyle = '#636e72';
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'center';
+            const numLabels = Math.min(10, Math.floor(w / 100));
+            for (let i = 0; i <= numLabels; i++) {
+                const t = (i / numLabels) * state.duration;
+                const x = (i / numLabels) * w;
+                ctx.fillText(formatTime(t), x, h - 5);
+            }
+
+            // Store canvas dimensions for playhead
+            state.canvasWidth = w;
+            state.canvasHeight = h;
+        }
+
+        // Playhead
+        function updatePlayhead(time) {
+            // Remove old playhead
+            const old = document.querySelector('.playhead-line');
+            if (old) old.remove();
+
+            if (!state.canvasWidth) return;
+            const x = (time / state.duration) * state.canvasWidth;
+
+            const container = $('waveformContainer');
+            const playhead = document.createElement('div');
+            playhead.className = 'playhead-line';
+            playhead.style.cssText = `
+                position:absolute; left:${x}px; top:0; bottom:0;
+                width:2px; background:var(--accent); z-index:15;
+                pointer-events:none;
+            `;
+            container.appendChild(playhead);
+        }
+
+        // Render pause bars on waveform
+        function renderPauseBars() {
+            pauseOverlay.innerHTML = '';
+
+            if (!state.canvasWidth) return;
+
+            state.pauses.forEach((p, i) => {
+                const bar = document.createElement('div');
+                bar.className = 'pause-bar';
+                bar.dataset.index = i;
+
+                const xStart = (p.start / state.duration) * state.canvasWidth;
+                const xEnd = (p.end / state.duration) * state.canvasWidth;
+                const xCenter = (xStart + xEnd) / 2;
+
+                bar.style.left = `${xCenter - 3}px`;
+                bar.innerHTML = `<div class="tooltip">#${i + 1} ${formatTime(p.start)} → ${formatTime(p.end)}<br>停顿: ${(p.duration * 1000).toFixed(0)}ms</div>`;
+
+                bar.addEventListener('click', () => selectPause(i));
+
+                pauseOverlay.appendChild(bar);
+            });
+        }
+
+        // Render pause list
+        // Calculate and update the duration diff display in the header
+        function updateDurationDiff() {
+            const adjustedPauses = state.pauses.filter(p => p.adjusted_duration !== null && p.adjusted_duration !== undefined);
+            const elHeader = $('durationDiff');
+            const elBtn = $('durationDiffBtn');
+            
+            if (adjustedPauses.length === 0) {
+                if (elHeader) elHeader.style.display = 'none';
+                if (elBtn) elBtn.style.display = 'none';
+                return;
+            }
+            if (elHeader) elHeader.style.display = 'inline-block';
+            if (elBtn) elBtn.style.display = 'inline-block';
+
+            // Calculate based on full audio duration, not just pauses
+            const originalPauseTotal = state.pauses.reduce((s, p) => s + p.duration, 0);
+            const adjustedPauseTotal = state.pauses.reduce((s, p) => s + (p.adjusted_duration !== null && p.adjusted_duration !== undefined ? p.adjusted_duration : p.duration), 0);
+            const pauseDiff = adjustedPauseTotal - originalPauseTotal;
+            
+            // Full audio duration before/after
+            const originalAudioDuration = state.duration;
+            const adjustedAudioDuration = state.duration + pauseDiff;
+            const audioDiff = adjustedAudioDuration - originalAudioDuration;
+
+            const diffSign = audioDiff > 0 ? '+' : '';
+            const diffCls = audioDiff > 0 ? 'positive' : audioDiff < 0 ? 'negative' : 'neutral';
+            const diffLabel = audioDiff > 0 ? '延长' : audioDiff < 0 ? '缩短' : '无变化';
+
+            const html = `⏱️ 原: <span class="val neutral">${originalAudioDuration.toFixed(1)}s</span> → 调整后: <span class="val neutral">${adjustedAudioDuration.toFixed(1)}s</span> | <span class="val ${diffCls}">${diffLabel}: ${diffSign}${audioDiff.toFixed(1)}s</span>`;
+            
+            if (elHeader) elHeader.innerHTML = html;
+            if (elBtn) elBtn.innerHTML = html;
+        }
+
+        function renderPauseList() {
+            pauseList.innerHTML = '';
+
+            if (state.pauses.length === 0) {
+                pauseList.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-dim);">未检测到句间停顿</div>';
+                return;
+            }
+
+            state.pauses.forEach((p, i) => {
+                const item = document.createElement('div');
+                item.className = 'pause-item';
+                item.dataset.index = i;
+
+                const adjusted = p.adjusted_duration !== null && p.adjusted_duration !== undefined;
+                const dur = adjusted ? p.adjusted_duration : p.duration;
+                const durMs = (dur * 1000).toFixed(0);
+                const diff = adjusted ? (p.adjusted_duration - p.duration) : 0;
+
+                let diffHtml = '';
+                if (adjusted) {
+                    const cls = diff > 0 ? 'positive' : 'negative';
+                    const sign = diff > 0 ? '+' : '';
+                    diffHtml = `<span class="diff ${cls}">${sign}${(diff * 1000).toFixed(0)}ms</span>`;
+                }
+
+                item.innerHTML = `
+                    <div class="idx">${i + 1}</div>
+                    <div class="time-info">
+                        <div class="time-range">${formatTime(p.start)} → ${formatTime(p.end)}</div>
+                    </div>
+                    <span class="duration">${durMs}ms</span>
+                    <input type="number" class="duration-input" value="${durMs}" min="0" step="50"
+                           data-index="${i}" title="毫秒">
+                    <span class="unit">ms</span>
+                    ${diffHtml}
+                `;
+
+                item.addEventListener('click', e => {
+                    if (e.target.tagName !== 'INPUT') selectPause(i);
+                });
+
+                const input = item.querySelector('.duration-input');
+                input.addEventListener('change', e => {
+                    const newMs = parseFloat(e.target.value);
+                    if (!isNaN(newMs) && newMs >= 0) {
+                        state.pauses[i].adjusted_duration = newMs / 1000;
+                        updateDurationDiff();
+                        renderPauseBars();
+                        // Re-render just the diff badges on other items
+                        document.querySelectorAll('.pause-item').forEach((el, idx) => {
+                            if (idx === i) return;
+                            const p = state.pauses[idx];
+                            const diff = p.adjusted_duration !== null && p.adjusted_duration !== undefined ? (p.adjusted_duration - p.duration) : 0;
+                            const diffEl = el.querySelector('.diff');
+                            if (diffEl) {
+                                const cls = diff > 0 ? 'positive' : 'negative';
+                                const sign = diff > 0 ? '+' : '';
+                                diffEl.className = `diff ${cls}`;
+                                diffEl.textContent = `${sign}${(diff * 1000).toFixed(0)}ms`;
+                            }
+                        });
+                    }
+                });
+
+                input.addEventListener('keydown', e => {
+                    if (e.key === 'Enter') {
+                        e.target.blur();
+                    }
+                });
+
+                pauseList.appendChild(item);
+            });
+        }
+
+        // Select a pause
+        function selectPause(index) {
+            state.selectedPauseIndex = index;
+
+            // Update bars
+            document.querySelectorAll('.pause-bar').forEach((bar, i) => {
+                bar.classList.toggle('selected', i === index);
+            });
+
+            // Update list
+            document.querySelectorAll('.pause-item').forEach((item, i) => {
+                item.classList.toggle('selected', i === index);
+            });
+
+            // Scroll to item
+            const item = pauseList.querySelector(`.pause-item[data-index="${index}"]`);
+            if (item) item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+            // Seek to this pause in audio
+            const p = state.pauses[index];
+            if (audioPlayer.src) {
+                audioPlayer.currentTime = p.start;
+                timeDisplay.textContent = formatTime(p.start);
+                progressFill.style.width = `${(p.start / state.duration) * 100}%`;
+                updatePlayhead(p.start);
+            }
+        }
+
+        // Reset all
+        $('btnResetAll').addEventListener('click', () => {
+            state.pauses.forEach(p => p.adjusted_duration = null);
+            renderPauseList();
+            renderPauseBars();
+            updateDurationDiff();
+            toast('已重置所有停顿', 'info');
+        });
+
+        // Apply all (set all to same duration - prompt user)
+        $('btnApplyAll').addEventListener('click', () => {
+            const ms = prompt('将所有停顿设置为多少毫秒？', '500');
+            if (ms !== null && !isNaN(parseFloat(ms))) {
+                const newDur = parseFloat(ms) / 1000;
+                state.pauses.forEach(p => p.adjusted_duration = newDur);
+                renderPauseList();
+                renderPauseBars();
+                updateDurationDiff();
+                toast(`已设置所有停顿为 ${ms}ms`, 'success');
+            }
+        });
+
+        // Generate
+        btnGenerate.addEventListener('click', async () => {
+            const adjustedPauses = state.pauses.map(p => ({
+                index: p.index,
+                adjusted_duration: p.adjusted_duration
+            }));
+
+            showProgress('生成新音频...', '正在处理，请稍候');
+            updateStep(4);
+
+            try {
+                const resp = await apiFetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        file_id: state.fileId,
+                        pauses: adjustedPauses,
+                        noise: state.noiseThreshold || -20
+                    }),
+                });
+
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    throw new Error(err.detail || '生成失败');
+                }
+
+                const data = await resp.json();
+                if (!data || !data.download_url) {
+                    throw new Error('生成响应无效：缺少下载链接');
+                }
+
+                // Calculate summary
+                const originalDur = state.pauses.reduce((s, p) => s + p.duration, 0);
+                const adjustedDur = state.pauses.reduce((s, p) => {
+                    return s + (p.adjusted_duration !== null ? p.adjusted_duration : p.duration);
+                }, 0);
+                const newTotal = state.duration - originalDur + adjustedDur;
+
+                $('summaryTable').innerHTML = `
+                    <tr><td>原始音频时长</td><td>${formatTime(state.duration)}</td></tr>
+                    <tr><td>检测到停顿数</td><td>${state.pauses.length} 个</td></tr>
+                    <tr><td>原始停顿总时长</td><td>${formatTime(originalDur)}</td></tr>
+                    <tr><td>调整后停顿总时长</td><td>${formatTime(adjustedDur)}</td></tr>
+                    <tr><td>新音频总时长</td><td>${formatTime(newTotal)}</td></tr>
+                    <tr><td>文件大小</td><td>${data.size ? (data.size / 1024 / 1024).toFixed(2) + ' MB' : '未知'}</td></tr>
+                `;
+
+                const apiBase = await resolveApiBase();
+                $('btnDownload').href = `${apiBase}${data.download_url}`;
+                $('btnDownload').download = data.filename;
+
+                // Set generated audio preview
+                const genPlayer = $('generatedAudioPlayer');
+                genPlayer.src = `${apiBase}${data.download_url}`;
+                genPlayer.load();
+
+                generateSection.classList.add('visible');
+                generateSection.scrollIntoView({ behavior: 'smooth' });
+
+                toast('音频生成成功！', 'success');
+            } catch (err) {
+                toast(err.message, 'error');
+                updateStep(3);
+            } finally {
+                hideProgress();
+            }
+        });
+
+        // New file
+        $('btnNewFile').addEventListener('click', () => {
+            location.reload();
+        });
+
+        // Re-analyze generated audio
+        $('btnReanalyzeGenerated').addEventListener('click', async () => {
+            const genPlayer = $('generatedAudioPlayer');
+            if (!genPlayer.src) {
+                toast('请先生成音频', 'error');
+                return;
+            }
+
+            showProgress('加载生成音频...', '正在下载并重新分析');
+            try {
+                // Download the generated audio
+                const resp = await fetch(genPlayer.src);
+                const blob = await resp.blob();
+                const file = new File([blob], 'generated_output.mp3', { type: blob.type });
+
+                // Upload it
+                const formData = new FormData();
+                formData.append('file', file);
+                state.originalFile = file;  // Store for playback
+                const uploadResp = await apiFetch('/api/upload', { method: 'POST', body: formData });
+                const uploadData = await uploadResp.json();
+
+                // Switch state to the new file
+                state.fileId = uploadData.file_id;
+                state.filename = '生成结果 - 重新检测';
+
+                // Run analysis
+                const noise = parseInt(noiseEditorSlider.value);
+                const minDur = parseInt($('minDurSlider').value) / 1000;
+                const analyzeResp = await apiFetch(`/api/analyze/${state.fileId}?noise=${noise}&min_duration=${minDur}`, { method: 'POST' });
+                const analyzeData = await analyzeResp.json();
+
+                state.duration = analyzeData.duration;
+                state.pauses = analyzeData.pauses;
+                state.noiseThreshold = noise;
+                syncNoiseSliders(noise);
+
+                // Show editor
+                generateSection.classList.remove('visible');
+                uploadArea.style.display = 'none';
+                editorPanel.classList.add('visible');
+                $('fileName').textContent = state.filename;
+                $('fileMeta').textContent = '';
+                $('totalDuration').textContent = formatTime(state.duration);
+                $('pauseCount').textContent = `${analyzeData.pauses.length} 个气口`;
+
+                await fetchWaveform();
+                renderWaveform();
+                renderPauseBars();
+                renderPauseList();
+                updateDurationDiff();
+                await setupAudio();
+
+                updateStep(3);
+                btnGenerate.disabled = false;
+                $('btnApplyAll').disabled = false;
+                $('btnResetAll').disabled = false;
+                $('btnReanalyze').disabled = false;
+
+                toast(`已加载生成音频，检测到 ${analyzeData.pauses.length} 个停顿`, 'success');
+            } catch (err) {
+                toast(err.message, 'error');
+            } finally {
+                hideProgress();
+            }
+        });
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            if (state.waveform.length) {
+                renderWaveform();
+                renderPauseBars();
+            }
+        });
+
+        // Noise slider handlers (editor panel only, manual button trigger)
+        const noiseEditorSlider = $('noiseEditorSlider');
+        const noiseEditorValue = $('noiseEditorValue');
+
+        function syncNoiseSliders(value) {
+            noiseEditorSlider.value = value;
+            noiseEditorValue.textContent = `${value}dB`;
+            updateActiveTick(parseInt(value));
+        }
+
+        // Render tick marks once, then just toggle active class
+        function renderNoiseTicks() {
+            const container = $('noiseTicks');
+            container.innerHTML = '';
+            for (let v = -35; v <= -10; v++) {
+                const tick = document.createElement('div');
+                tick.className = 'tick';
+                tick.innerHTML = `<span class="tick-line"></span><span class="tick-label">${v}</span>`;
+                container.appendChild(tick);
+            }
+        }
+
+        function updateActiveTick(activeVal) {
+            document.querySelectorAll('.noise-ticks .tick').forEach((tick, i) => {
+                tick.classList.toggle('active', i === (activeVal + 35));
+            });
+        }
+
+        renderNoiseTicks();
+        updateActiveTick(-20);
+
+        async function reanalyzeWithNoise(noise, minDur) {
+            if (!state.fileId) return;
+            // Add loading animation to the button
+            const btn = $('btnReanalyze');
+            btn.classList.add('reanalyzing');
+            btn.innerHTML = '⏳ 检测中...';
+            btn.disabled = true;
+
+            // Animate pause list fade out
+            const pauseList = $('pauseList');
+            pauseList.style.opacity = '0.3';
+            pauseList.style.transition = 'opacity 0.3s ease';
+
+            try {
+                const resp = await apiFetch(`/api/analyze/${state.fileId}?noise=${noise}&min_duration=${minDur}`, {
+                    method: 'POST',
+                });
+                if (!resp.ok) throw new Error('分析失败');
+                const data = await resp.json();
+                state.pauses = data.pauses;
+                state.noiseThreshold = noise;
+                syncNoiseSliders(noise);
+
+                // Animate pause list fade in with stagger
+                pauseList.style.opacity = '1';
+                pauseList.style.transition = 'opacity 0.5s ease';
+
+                renderWaveform();
+                renderPauseBars();
+                renderPauseList();
+                updateDurationDiff();
+                $('pauseCount').textContent = `${data.pauses.length} 个气口`;
+                const pauseInfo = data.noise_floor !== undefined ? `底噪: ${data.noise_floor}dB | 阈值: ${data.threshold}dB` : `阈值: ${noise}dB`;
+                toast(`检测到 ${data.pauses.length} 个停顿（${pauseInfo}）`, 'success');
+            } catch (err) {
+                toast(err.message, 'error');
+            } finally {
+                btn.classList.remove('reanalyzing');
+                btn.innerHTML = '🔍 重新检测';
+                btn.disabled = false;
+            }
+        }
+
+        noiseEditorSlider.addEventListener('input', () => syncNoiseSliders(noiseEditorSlider.value));
+
+        // Min duration slider
+        const minDurSlider = $('minDurSlider');
+        const minDurValue = $('minDurValue');
+        minDurSlider.addEventListener('input', () => {
+            minDurValue.textContent = `${minDurSlider.value}ms`;
+        });
+
+        // Re-analyze button handler
+        $('btnReanalyze').addEventListener('click', async () => {
+            const noise = parseInt(noiseEditorSlider.value);
+            const minDur = parseInt($('minDurSlider').value) / 1000;
+            await reanalyzeWithNoise(noise, minDur);
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', e => {
+            if (e.target.tagName === 'INPUT') return;
+            if (e.code === 'Space') {
+                e.preventDefault();
+                togglePlay();
+            }
+        });
+
+        // Audio ended
+        audioPlayer.addEventListener('ended', () => {
+            state.isPlaying = false;
+            btnPlay.innerHTML = '▶ 播放';
+            progressFill.style.width = '100%';
+        });
+    </script>
+</body>
+</html>

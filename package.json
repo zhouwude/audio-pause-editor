@@ -1,0 +1,64 @@
+{
+  "name": "audio-pause-editor",
+  "version": "0.1.0",
+  "description": "音频停顿编辑器 - 分析并调整音频中的句间停顿",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "electron .",
+    "build-sidecar": "pyinstaller --clean --onefile sidecar/build-sidecar.spec",
+    "build": "electron-builder",
+    "build:dir": "electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.audio-pause-editor",
+    "productName": "音频停顿编辑器",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "frontend",
+        "to": "frontend",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": ["**/*", "!__pycache__", "!*.pyc"]
+      },
+      {
+        "from": "sidecar",
+        "to": ".",
+        "filter": ["**/*.exe"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": null
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "音频停顿编辑器"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "category": "AudioVideo"
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}

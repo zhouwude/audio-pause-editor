@@ -1,0 +1,14 @@
+node_modules/
+dist/
+__pycache__/
+*.pyc
+*.pyo
+sidecar/*.exe
+sidecar/build/
+venv*/
+.venv*/
+*.egg-info/
+.env
+.DS_Store
+*.tmp
+*.log
