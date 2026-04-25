@@ -34,6 +34,11 @@
         "from": "sidecar",
         "to": ".",
         "filter": ["**/*.exe"]
+      },
+      {
+        "from": "ffmpeg",
+        "to": "ffmpeg",
+        "filter": ["**/*"]
       }
     ],
     "win": {

@@ -8,10 +8,11 @@ from pathlib import Path
 
 
 def get_bundle_dir():
-    """PyInstaller --onefile 运行时，所有资源解压在此"""
+    """PyInstaller --onefile 运行时，所有资源解压在此。
+    开发模式下，返回项目根目录以找到 backend/。"""
     if getattr(sys, 'frozen', False):
         return Path(sys._MEIPASS)
-    return Path(__file__).resolve().parent
+    return Path(__file__).resolve().parent.parent
 
 
 def find_free_port(preferred=8888):
