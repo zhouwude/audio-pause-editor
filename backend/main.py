@@ -383,7 +383,7 @@ async def generate_audio(req: GenerateRequest):
     concat_list_path = work_dir / "concat_list.txt"
     with open(concat_list_path, "w") as f:
         for part in parts:
-            f.write(f"file '{part}'\n")
+            f.write(f"file '{part.as_posix()}'\n")
 
     output_path = TEMP_DIR / f"{file_id}_output.wav"
     concat_cmd = [
@@ -550,7 +550,8 @@ if __name__ == "__main__":
         server.should_exit = True
 
     signal.signal(signal.SIGINT, _shutdown)
-    signal.signal(signal.SIGTERM, _shutdown)
+    if os.name != 'nt':
+        signal.signal(signal.SIGTERM, _shutdown)
 
     import asyncio
     asyncio.run(server.serve())

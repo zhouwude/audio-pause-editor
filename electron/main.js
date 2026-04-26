@@ -52,6 +52,7 @@ function startBackend(resolve) {
     backendProcess = spawn(sidecarExe, [], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env },
+      windowsHide: true,
     });
     console.log('[Backend] Spawning sidecar exe:', sidecarExe);
   } else {
@@ -64,6 +65,7 @@ function startBackend(resolve) {
     backendProcess = spawn(pythonCmd, [path.join(backendDir, 'main.py')], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env },
+      windowsHide: true,
     });
     console.log('[Backend] Spawning python:', pythonCmd, backendDir);
   }

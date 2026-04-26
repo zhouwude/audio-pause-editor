@@ -103,15 +103,8 @@ def main():
         server.should_exit = True
 
     signal.signal(signal.SIGINT, _shutdown)
-    signal.signal(signal.SIGTERM, _shutdown)
-
-    # Windows: handle console control events (taskkill /T, Ctrl+C in console)
-    if os.name == 'nt':
-        import ctypes
-        kernel32 = ctypes.WinDLL('kernel32')
-        if kernel32.SetConsoleCtrlHandler(None, False):
-            # Already handled via SIGINT/SIGTERM from taskkill
-            pass
+    if os.name != 'nt':
+        signal.signal(signal.SIGTERM, _shutdown)
 
     import asyncio
     asyncio.run(server.serve())
