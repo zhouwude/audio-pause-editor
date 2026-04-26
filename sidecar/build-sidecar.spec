@@ -1,10 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec — Electron 版 Python Sidecar (--onefile)"""
+"""PyInstaller spec — Electron 版 Python Sidecar (--onedir, 启动快)"""
 block_cipher = None
 
 ROOT = os.path.dirname(os.path.abspath(SPEC)) if 'SPEC' in dir() else os.path.dirname(os.path.abspath(__file__))
-# ROOT = D:\CustomProgram\audio-pause-editor-electron\sidecar
-# project dir is one level up
 PROJECT_ROOT = os.path.dirname(ROOT)
 BACKEND = os.path.join(PROJECT_ROOT, 'backend')
 FFMPEG_DIR = os.path.join(PROJECT_ROOT, 'ffmpeg')
@@ -69,4 +67,14 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='audio-pause-server',
 )

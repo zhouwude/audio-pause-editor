@@ -33,7 +33,7 @@
       {
         "from": "sidecar",
         "to": ".",
-        "filter": ["**/*.exe"]
+        "filter": ["audio-pause-server/**/*"]
       },
       {
         "from": "ffmpeg",

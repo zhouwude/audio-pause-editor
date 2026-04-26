@@ -44,8 +44,9 @@ function killBackend() {
 function startBackend(resolve) {
   if (apiPort) { resolve(apiPort); return; }
 
+  // 生产模式：使用 onedir 打包的 sidecar
   const sidecarExe = process.resourcesPath
-    ? path.join(process.resourcesPath, 'audio-pause-server.exe')
+    ? path.join(process.resourcesPath, 'audio-pause-server', 'audio-pause-server.exe')
     : null;
 
   if (sidecarExe && fs.existsSync(sidecarExe)) {
