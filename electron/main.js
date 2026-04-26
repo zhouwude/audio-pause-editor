@@ -8,10 +8,24 @@ let mainWindow = null;
 let backendProcess = null;
 let apiPort = null;
 
+// IPC: renderer asks for API port
+ipcMain.handle('get-api-port', () => apiPort);
+
+// IPC: renderer asks for frontend resources path (production)
+ipcMain.handle('get-frontend-path', () => {
+  const candidates = [
+    process.resourcesPath && path.join(process.resourcesPath, 'frontend', 'index.html'),
+    path.join(__dirname, '..', 'frontend', 'index.html'),
+  ].filter(Boolean);
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+});
+
 function startBackend(resolve) {
   if (apiPort) { resolve(apiPort); return; }
 
-  // 生产模式：使用打包好的 sidecar exe
   const sidecarExe = process.resourcesPath
     ? path.join(process.resourcesPath, 'audio-pause-server.exe')
     : null;
@@ -23,7 +37,6 @@ function startBackend(resolve) {
     });
     console.log('[Backend] Spawning sidecar exe:', sidecarExe);
   } else {
-    // 开发模式：python backend/main.py
     const pythonExe = os.platform() === 'win32' ? 'python.exe' : 'python3';
     let pythonCmd = pythonExe;
     const venvPython = path.join(__dirname, '..', 'venv', os.platform() === 'win32' ? 'Scripts' : 'bin', pythonExe);
@@ -86,15 +99,10 @@ function createWindow() {
       return;
     }
 
-    // 写端口到系统临时目录（开发+生产统一路径）
-    const portFile = path.join(
-      os.tmpdir(),
-      '.audio-pause-editor-port'
-    );
-    fs.writeFileSync(portFile, String(port));
-    console.log('[Main] Port file written:', portFile, 'port:', port);
+    // 端口存在内存中，preload 通过 IPC 获取
+    console.log('[Main] API port:', port);
 
-    // 生产模式从 resources 读，开发模式从项目目录读
+    // 加载前端页面
     const frontendPath = process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, 'frontend', 'index.html'))
       ? path.join(process.resourcesPath, 'frontend', 'index.html')
       : path.join(__dirname, '..', 'frontend', 'index.html');
@@ -102,7 +110,7 @@ function createWindow() {
     mainWindow.loadFile(frontendPath);
     console.log('[Main] loadFile:', frontendPath);
 
-    // Debug mode: open DevTools (development only)
+    // Debug mode
     if (!process.resourcesPath) {
       mainWindow.webContents.openDevTools();
     }
@@ -114,7 +122,6 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
-// Window control IPC handlers with channel validation
 const WINDOW_ACTIONS = new Set(['window-minimize', 'window-maximize', 'window-close']);
 
 ipcMain.on('window-control', (event, action) => {
