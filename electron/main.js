@@ -54,6 +54,7 @@ function startBackend(resolve) {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env },
       windowsHide: true,
+      detached: false,
     });
     console.log('[Backend] Spawning sidecar exe:', sidecarExe);
   } else {
