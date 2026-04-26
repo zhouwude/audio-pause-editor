@@ -89,6 +89,10 @@ def main():
     # 找端口并打印
     port = find_free_port(8888)
     print(f'PORT:{port}', flush=True)
+    # 同时写入临时文件（console=False 时 stdout 不可靠）
+    import tempfile
+    port_file = Path(tempfile.gettempdir()) / '.audio-pause-editor-port'
+    port_file.write_text(str(port))
 
     # 让 Python 能找到 backend 模块
     sys.path.insert(0, str(bundle_dir))
