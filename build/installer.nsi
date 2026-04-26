@@ -14,7 +14,15 @@ OutFile "../dist/audio-pause-editor_${APP_VERSION}_x64-setup.exe"
 InstallDir "$PROGRAMFILES64\${APP_NAME}"
 
 ; 安装页面
-InstallDirRegKey HKLM "Software\${APP_NAME}" ""
+!include "MUI2.nsh"
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_DIRECTORY  ; 允许用户选择安装目录
+!insertmacro MUI_PAGE_INSTFILES
+!insertmacro MUI_PAGE_FINISH
+
+!insertmacro MUI_UNPAGE_CONFIRM
+!insertmacro MUI_UNPAGE_INSTFILES
+
 ShowInstDetails show
 
 Section "${APP_NAME}" SEC01
@@ -26,18 +34,19 @@ Section "${APP_NAME}" SEC01
     CreateDirectory "$SMPROGRAMS\${APP_NAME}"
     CreateShortCut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\音频停顿编辑器.exe"
 
-    ; 写入卸载信息
+    ; 写入注册表
     WriteRegStr HKLM "Software\${APP_NAME}" "" "$INSTDIR"
     WriteRegStr HKLM "${APP_UNINST_KEY}" "DisplayName" "${APP_NAME}"
     WriteRegStr HKLM "${APP_UNINST_KEY}" "DisplayVersion" "${APP_VERSION}"
     WriteRegStr HKLM "${APP_UNINST_KEY}" "Publisher" "${APP_PUBLISHER}"
     WriteRegStr HKLM "${APP_UNINST_KEY}" "InstallLocation" "$INSTDIR"
-    WriteRegStr HKLM "${APP_UNINST_KEY}" "UninstallString" "$INSTDIR\uninstall.exe"
-    WriteUninstaller "$INSTDIR\uninstall.exe"
+    WriteRegStr HKLM "${APP_UNINST_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
+
+    WriteUninstaller "$INSTDIR\Uninstall.exe"
 SectionEnd
 
 Section "Uninstall"
-    Delete "$INSTDIR\uninstall.exe"
+    Delete "$INSTDIR\Uninstall.exe"
     RMDir /r "$INSTDIR"
 
     Delete "$DESKTOP\${APP_NAME}.lnk"

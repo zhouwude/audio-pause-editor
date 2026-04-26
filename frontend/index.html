@@ -1041,6 +1041,7 @@
                     const port = await window.electronAPI.getApiPort();
                     if (port) {
                         _apiBaseResolved = `http://127.0.0.1:${port}`;
+                    }
                 }
                 // Tauri: get port from Rust sidecar manager
                 else if (window.__TAURI__ && window.__TAURI__.invoke) {
