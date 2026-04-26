@@ -4,7 +4,19 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
+
+
+def _watch_parent(initial_ppid: int):
+    """Background thread: exit when parent process dies."""
+    while True:
+        time.sleep(2)
+        current_ppid = os.getppid()
+        # If PPID changed (e.g., reparented to init/PID 1), parent is gone
+        if current_ppid != initial_ppid:
+            os._exit(1)
 
 
 def get_bundle_dir():
@@ -55,6 +67,11 @@ def find_free_port(preferred=8888):
 def main():
     bundle_dir = get_bundle_dir()
 
+    # 启动父进程死亡检测线程
+    parent_pid = os.getppid()
+    watcher = threading.Thread(target=_watch_parent, args=(parent_pid,), daemon=True)
+    watcher.start()
+
     # 设置 ffmpeg 路径
     ffmpeg_dir = bundle_dir / 'ffmpeg'
     if ffmpeg_dir.exists():
@@ -78,7 +95,6 @@ def main():
     from backend.main import app
     import uvicorn
 
-    # 优雅退出
     server = uvicorn.Server(
         config=uvicorn.Config(app, host='127.0.0.1', port=port, log_level='warning')
     )
@@ -88,6 +104,14 @@ def main():
 
     signal.signal(signal.SIGINT, _shutdown)
     signal.signal(signal.SIGTERM, _shutdown)
+
+    # Windows: handle console control events (taskkill /T, Ctrl+C in console)
+    if os.name == 'nt':
+        import ctypes
+        kernel32 = ctypes.WinDLL('kernel32')
+        if kernel32.SetConsoleCtrlHandler(None, False):
+            # Already handled via SIGINT/SIGTERM from taskkill
+            pass
 
     import asyncio
     asyncio.run(server.serve())

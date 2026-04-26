@@ -482,7 +482,18 @@ if __name__ == "__main__":
     import signal
     import socket
     import subprocess
+    import threading
+    import time
     import uvicorn
+
+    # Parent process death detection — exit if parent (Electron) is gone
+    _initial_ppid = os.getppid()
+    def _watch_parent():
+        while True:
+            time.sleep(2)
+            if os.getppid() != _initial_ppid:
+                os._exit(1)
+    threading.Thread(target=_watch_parent, daemon=True).start()
 
     def _find_free_port(preferred: int = 8888) -> int:
         """Find free port, killing existing process if needed."""

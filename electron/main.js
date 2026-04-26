@@ -23,6 +23,24 @@ ipcMain.handle('get-frontend-path', () => {
   return null;
 });
 
+function killBackend() {
+  if (!backendProcess) return;
+  const pid = backendProcess.pid;
+  if (pid) {
+    console.log('[Main] Killing backend PID:', pid);
+    if (os.platform() === 'win32') {
+      require('child_process').spawn('taskkill', ['/F', '/T', '/PID', String(pid)], {
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+    } else {
+      try { backendProcess.kill('SIGKILL'); } catch (e) {}
+    }
+  }
+  backendProcess = null;
+  apiPort = null;
+}
+
 function startBackend(resolve) {
   if (apiPort) { resolve(apiPort); return; }
 
@@ -120,6 +138,11 @@ function createWindow() {
   });
 
   mainWindow.on('closed', () => { mainWindow = null; });
+
+  // Ensure backend is killed when the window closes
+  mainWindow.on('close', () => {
+    killBackend();
+  });
 }
 
 const WINDOW_ACTIONS = new Set(['window-minimize', 'window-maximize', 'window-close']);
@@ -139,17 +162,21 @@ app.commandLine.appendSwitch('--disable-gpu');
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
-  if (backendProcess) {
-    backendProcess.kill('SIGINT');
-    backendProcess = null;
-  }
+  killBackend();
   app.quit();
 });
 
+app.on('before-quit', () => {
+  killBackend();
+});
+
 process.on('SIGINT', () => {
-  if (backendProcess) backendProcess.kill('SIGINT');
+  killBackend();
   app.quit();
 });
+
+// Ultimate fallback: kill backend if Node exits for any reason
+process.on('exit', killBackend);
 
 app.on('activate', () => {
   if (mainWindow === null) createWindow();
